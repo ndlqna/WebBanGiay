@@ -1,4 +1,3 @@
-
 package PROCESSDATA;
 
 /*
@@ -159,6 +158,7 @@ public class XULYDULIEU {
         }
         return null;
     }
+
     //tự thêm
     public PreparedStatement getPreparedStatement(String sql) {
         try {
@@ -168,6 +168,7 @@ public class XULYDULIEU {
             return null;
         }
     }
+
     public int getCount(String sql, Object[] param) {
         int count = 0;
         ResultSet rs = null;
@@ -186,5 +187,15 @@ public class XULYDULIEU {
             ex.printStackTrace();
         }
         return count;
+    }
+
+    public int getTotalRecords(String tableName) throws SQLException {
+        String sql = "SELECT COUNT(*) FROM " + tableName;
+        PreparedStatement ps = cnn.prepareStatement(sql);
+        ResultSet rs = ps.executeQuery();
+        if (rs.next()) {
+            return rs.getInt(1);
+        }
+        return 0;
     }
 }

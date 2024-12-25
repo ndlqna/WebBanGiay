@@ -73,6 +73,52 @@
                 font-weight: bold;
                 color: #444; /* Màu chữ giống phần nội dung chính */
             }
+            .pagination {
+                margin: 20px auto; /* Căn giữa và thêm khoảng cách trên dưới */
+                display: flex;
+                justify-content: center; /* Căn giữa các phần tử */
+                align-items: center; /* Căn chỉnh theo chiều dọc */
+                clear: both; /* Loại bỏ ảnh hưởng của các phần tử trước đó */
+            }
+
+            .pagination ul {
+                list-style: none;
+                padding: 0;
+                margin: 0;
+                display: flex;
+            }
+
+            .pagination li {
+                margin: 0 5px;
+            }
+
+            .pagination li a {
+                display: inline-block;
+                padding: 8px 16px;
+                text-decoration: none;
+                color: #333;
+                border: 1px solid #ddd;
+                border-radius: 5px;
+                transition: all 0.3s ease;
+            }
+
+            .pagination li a:hover {
+                background-color: #2575fc;
+                color: #fff;
+            }
+
+            .pagination li.active a {
+                background-color: #2575fc;
+                color: #fff;
+                pointer-events: none; /* Vô hiệu hóa click */
+            }
+
+            .pagination li.disabled a {
+                color: #ccc;
+                border-color: #ccc;
+                pointer-events: none; /* Vô hiệu hóa click */
+            }
+
         </style>
     </head>
     <body>
@@ -220,38 +266,70 @@
                     <%
                         // Lấy giá trị từ URL (search và category)
                         String search = request.getParameter("search");
-                        selectedCategory = request.getParameter("category");
-                        String sql = "SELECT * FROM tbSANPHAM"; // Câu SQL mặc định
+//                        String selectedCategory = request.getParameter("category");
+                        int currentPage = 1; // Trang hiện tại
+                        int pageSize = 9; // Số sản phẩm trên mỗi trang
 
-                        // Xây dựng điều kiện WHERE
+                        // Lấy trang hiện tại từ URL
+                        if (request.getParameter("page") != null) {
+                            currentPage = Integer.parseInt(request.getParameter("page"));
+                        }
+
+                        // Xây dựng câu lệnh SQL động
+                        StringBuilder sqlBuilder = new StringBuilder("SELECT * FROM tbSANPHAM");
+                        StringBuilder countSqlBuilder = new StringBuilder("SELECT COUNT(*) AS totalProducts FROM tbSANPHAM");
+
+                        // Thêm điều kiện WHERE nếu cần
+                        boolean hasCondition = false;
                         if ((search != null && !search.trim().isEmpty()) || (selectedCategory != null && !selectedCategory.trim().isEmpty())) {
-                            sql += " WHERE";
+                            sqlBuilder.append(" WHERE");
+                            countSqlBuilder.append(" WHERE");
 
                             if (search != null && !search.trim().isEmpty()) {
-                                sql += " TENSANPHAM LIKE ?";
+                                sqlBuilder.append(" TENSANPHAM LIKE ?");
+                                countSqlBuilder.append(" TENSANPHAM LIKE ?");
+                                hasCondition = true;
                             }
 
                             if (selectedCategory != null && !selectedCategory.trim().isEmpty()) {
-                                if (search != null && !search.trim().isEmpty()) {
-                                    sql += " AND"; // Nếu cả search và category có giá trị, thêm AND
+                                if (hasCondition) {
+                                    sqlBuilder.append(" AND");
+                                    countSqlBuilder.append(" AND");
                                 }
-                                sql += " MADANHMUC = ?";
+                                sqlBuilder.append(" MADANHMUC = ?");
+                                countSqlBuilder.append(" MADANHMUC = ?");
                             }
                         }
 
-                        try {
-                            PreparedStatement ps = xuly.getPreparedStatement(sql);
+                        // Thêm phần phân trang
+                        sqlBuilder.append(" ORDER BY MASANPHAM ASC OFFSET ? ROWS FETCH NEXT ? ROWS ONLY");
 
-                            // Truyền giá trị vào câu SQL
+                        // Kết nối cơ sở dữ liệu và chuẩn bị câu lệnh
+                        try {
+                            PreparedStatement countStatement = xuly.getPreparedStatement(countSqlBuilder.toString());
+                            PreparedStatement ps = xuly.getPreparedStatement(sqlBuilder.toString());
+
+                            // Gán tham số cho câu lệnh SQL
                             int paramIndex = 1;
                             if (search != null && !search.trim().isEmpty()) {
+                                countStatement.setString(paramIndex, "%" + search + "%");
                                 ps.setString(paramIndex++, "%" + search + "%");
                             }
                             if (selectedCategory != null && !selectedCategory.trim().isEmpty()) {
+                                countStatement.setString(paramIndex, selectedCategory);
                                 ps.setString(paramIndex++, selectedCategory);
                             }
 
-                            // Thực hiện truy vấn
+                            // Gán tham số cho phân trang
+                            ps.setInt(paramIndex++, (currentPage - 1) * pageSize);
+                            ps.setInt(paramIndex, pageSize);
+
+                            // Tính tổng số sản phẩm
+                            ResultSet rsCount = countStatement.executeQuery();
+                            int totalProducts = rsCount.next() ? rsCount.getInt("totalProducts") : 0;
+                            int totalPages = (int) Math.ceil((double) totalProducts / pageSize);
+
+                            // Lấy sản phẩm
                             ResultSet rsSANPHAM = ps.executeQuery();
                             while (rsSANPHAM.next()) {
                                 String tenSanPham = rsSANPHAM.getString("TENSANPHAM");
@@ -275,15 +353,44 @@
                             </div>
                         </div>
                         <div class="bottom_prod_box"></div>
-                        <div class="prod_details_tab"> <a href="#" title="header=[Add to cart] body=[&nbsp;] fade=[on]"><img src="images/cart.gif" alt="" border="0" class="left_bt" /></a> <a href="#" title="header=[Specials] body=[&nbsp;] fade=[on]"><img src="images/favs.gif" alt="" border="0" class="left_bt" /></a> <a href="#" title="header=[Gifts] body=[&nbsp;] fade=[on]"><img src="images/favorites.gif" alt="" border="0" class="left_bt" /></a> <a href="details.html" class="prod_details">details</a> </div>
                     </div>
                     <%
-                            }
+                        }
+                    %>
+                    <!-- Pagination -->
+                    <div class="pagination">
+                        <ul>
+                            <!-- Nút Trước -->
+                            <li class="<%= (currentPage == 1) ? "disabled" : ""%>">
+                                <a href="HOME.jsp?page=<%= currentPage - 1%>
+                                   <%= (search != null) ? "&search=" + search : ""%>
+                                   <%= (selectedCategory != null) ? "&category=" + selectedCategory : ""%>">Trước</a>
+                            </li>
+
+                            <!-- Các trang -->
+                            <% for (int i = 1; i <= totalPages; i++) {%>
+                            <li class="<%= (i == currentPage) ? "active" : ""%>">
+                                <a href="HOME.jsp?page=<%= i%>
+                                   <%= (search != null) ? "&search=" + search : ""%>
+                                   <%= (selectedCategory != null) ? "&category=" + selectedCategory : ""%>"><%= i%></a>
+                            </li>
+                            <% }%>
+
+                            <!-- Nút Tiếp -->
+                            <li class="<%= (currentPage == totalPages) ? "disabled" : ""%>">
+                                <a href="HOME.jsp?page=<%= currentPage + 1%>
+                                   <%= (search != null) ? "&search=" + search : ""%>
+                                   <%= (selectedCategory != null) ? "&category=" + selectedCategory : ""%>">Tiếp</a>
+                            </li>
+                        </ul>
+                    </div>
+                    <%
                         } catch (Exception e) {
                             e.printStackTrace();
                         }
                     %>
                 </div>
+
 
                 <!-- Right Content for Cart and New Products -->
                 <div class="right_content">
